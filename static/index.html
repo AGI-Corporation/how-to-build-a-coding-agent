@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Self-Coding Agent</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header>
+      <h1>🧠 Self-Coding Agent</h1>
+      <div class="status" id="status" aria-live="polite">connecting…</div>
+    </header>
+
+    <main>
+      <ol id="messages" class="messages" aria-live="polite" aria-relevant="additions"></ol>
+    </main>
+
+    <footer>
+      <form id="composer">
+        <button
+          id="mic"
+          type="button"
+          class="mic"
+          aria-label="Hold to speak"
+          title="Press to start voice input"
+        >
+          🎙️
+        </button>
+        <textarea
+          id="input"
+          rows="1"
+          placeholder="Type or press the mic… (Enter to send, Shift+Enter for newline)"
+          autofocus
+        ></textarea>
+        <button id="send" type="submit" class="send">Send</button>
+      </form>
+
+      <div class="controls">
+        <label>
+          <input type="checkbox" id="tts" />
+          🔊 Speak responses
+        </label>
+        <button id="reset" type="button" class="link">Reset conversation</button>
+      </div>
+      <div id="error" class="error" role="alert"></div>
+    </footer>
+
+    <script src="app.js"></script>
+  </body>
+</html>

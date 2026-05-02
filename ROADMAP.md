@@ -24,6 +24,7 @@ capability and the original commit (oldest first).
 | 5 | Edit and create files | [`edit_tool.go`](./edit_tool.go) | Adds `edit_file` |
 | 6 | Code search via ripgrep | [`code_search_tool.go`](./code_search_tool.go) | Adds `code_search` |
 | 7 | Self-coding agent for docs | [`self_coding_agent.go`](./self_coding_agent.go) | All previous tools + `git_log`, system prompt focused on ROADMAP.md and README.md |
+| 8 | Web UI with voice | [`web_agent.go`](./web_agent.go) + [`static/`](./static) | HTTP server with embedded frontend, Web Speech API for voice in/out, per-session conversation state |
 
 ---
 
@@ -45,8 +46,10 @@ here is fair game for a contributor to pick up.
   (likely a `memory.json` next to the binary).
 - **Tool chaining helper** — a higher-level tool that composes search → read →
   edit in one call to reduce round-trips.
-- **Web UI** — a small HTTP front-end that wraps the existing event loop so
-  non-terminal users can try the workshop.
+- **Streaming responses** — switch `/api/chat` to SSE/WebSocket so the
+  web UI shows tokens as they arrive instead of waiting for the full reply.
+- **Server-side TTS** — replace browser SpeechSynthesis with a higher-quality
+  voice from a TTS API for more natural responses.
 - **Test harness** — golden-file tests for each tool's `Function` so refactors
   don't silently break behaviour.
 - **Multi-model support** — pluggable backend so the workshop can demonstrate

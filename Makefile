@@ -1,7 +1,7 @@
 .PHONY: build fmt check clean all
 
 # Go binaries to build
-BINARIES := bash_tool chat edit_tool list_files read code_search_tool self_coding_agent
+BINARIES := bash_tool chat edit_tool list_files read code_search_tool self_coding_agent web_agent
 
 # Build all binaries
 build:
@@ -13,6 +13,7 @@ build:
 	go build -o read read.go
 	go build -o code_search_tool code_search_tool.go
 	go build -o self_coding_agent self_coding_agent.go
+	go build -o web_agent web_agent.go
 
 # Format all Go files
 fmt:
@@ -29,6 +30,7 @@ check:
 	go vet read.go
 	go vet code_search_tool.go
 	go vet self_coding_agent.go
+	go vet web_agent.go
 	@echo "Running go mod tidy..."
 	go mod tidy
 

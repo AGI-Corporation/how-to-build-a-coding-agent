@@ -22,7 +22,7 @@ By the end of this workshop, you’ll understand how to:
 
 ## 🛠️ What We're Building
 
-You’ll build 7 versions of a coding assistant.
+You’ll build 8 versions of a coding assistant.
 
 Each version adds more features:
 
@@ -35,6 +35,8 @@ Each version adds more features:
 7. **Self-Coding Agent** — combines every tool above plus `git_log`, with a
    system prompt focused on maintaining the [`ROADMAP.md`](./ROADMAP.md) and
    the README itself
+8. **Web Agent with Voice** — the same loop behind an HTTP server with a
+   browser UI and Web Speech API voice input/output
 
 ```mermaid
 graph LR
@@ -45,6 +47,7 @@ graph LR
         D --> E[edit_tool.go<br/>+ File Editing]
         E --> F[code_search_tool.go<br/>+ Code Search]
         F --> S[self_coding_agent.go<br/>+ Git Log & Docs Focus]
+        S --> W[web_agent.go<br/>+ HTTP UI & Voice]
     end
 
     subgraph "Tool Capabilities"
@@ -54,6 +57,7 @@ graph LR
         J --> K[read_file<br/>list_files<br/>bash<br/>edit_file]
         K --> L[read_file<br/>list_files<br/>bash<br/>code_search]
         L --> M[read_file<br/>list_files<br/>bash<br/>edit_file<br/>code_search<br/>git_log]
+        M --> N[same six tools<br/>+ HTTP/JSON transport<br/>+ Web Speech API]
     end
 
     A -.-> G
@@ -63,6 +67,7 @@ graph LR
     E -.-> K
     F -.-> L
     S -.-> M
+    W -.-> N
 ```
 
 At the end, you’ll end up with a powerful local developer assistant!
@@ -255,6 +260,42 @@ go run self_coding_agent.go
 
 ---
 
+### 8. `web_agent.go` — Browser UI with Voice
+
+The same agent loop, exposed over HTTP with a static frontend embedded
+into the binary. The browser UI uses the **Web Speech API** for hands-free
+input (speech-to-text) and an optional text-to-speech toggle for spoken
+replies.
+
+```bash
+go run web_agent.go              # listens on :8080
+go run web_agent.go -addr :3000  # custom port
+```
+
+Then open <http://localhost:8080> in **Chrome or Edge** (Web Speech API is
+not yet supported in Firefox).
+
+Architecture:
+
+* `web_agent.go` — Go server. Same six tools as stage 7. Chat state lives
+  per-session in memory (keyed by a session id stored in the browser's
+  `sessionStorage`).
+* `static/index.html`, `static/app.js`, `static/style.css` — embedded into
+  the binary via `//go:embed static`, so the binary is self-contained.
+* `POST /api/chat` — drives the tool loop and returns the final text plus
+  a transcript of any tool calls (so the UI can render them).
+* `POST /api/reset` — clears a session.
+* `GET  /api/health` — sanity check used by the UI on load.
+
+UI features:
+
+* 🎙️ **Hold-to-speak microphone** with live interim transcripts.
+* 🔊 **Text-to-speech toggle** that reads each response aloud.
+* 🔧 **Tool-call visualisation** so you can see what the agent did.
+* Reset button to start fresh.
+
+---
+
 ## 🧪 Sample Files (Already Included)
 
 1. `fizzbuzz.js`: for file reading and editing
@@ -320,6 +361,7 @@ Schema generation uses Go structs — so it’s easy to define and reuse.
 | **5** | `edit_tool.go`: File editing, safety checks      |
 | **6** | `code_search_tool.go`: Pattern search, ripgrep   |
 | **7** | `self_coding_agent.go`: System prompts, `git_log`, self-modification, ROADMAP.md upkeep |
+| **8** | `web_agent.go`: HTTP server, embedded static UI, Web Speech API, session state |
 
 ---
 

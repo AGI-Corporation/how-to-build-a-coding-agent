@@ -18,6 +18,7 @@ read
 read_verbose
 code_search_tool
 self_coding_agent
+web_agent
 
 # demo files
 fizzbuzz.js
