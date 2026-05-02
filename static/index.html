@@ -3,18 +3,59 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Self-Coding Agent</title>
+    <title>Self-Coding Agent · Voice & Text</title>
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
     <header>
-      <h1>🧠 Self-Coding Agent</h1>
-      <div class="status" id="status" aria-live="polite">connecting…</div>
+      <div class="brand">
+        <h1>🧠 Self-Coding Agent</h1>
+        <div class="status" id="status" aria-live="polite">connecting…</div>
+      </div>
+      <div class="header-controls">
+        <label class="select" title="Voice used for spoken replies">
+          <span>Voice</span>
+          <select id="voiceSelect" aria-label="Voice"></select>
+        </label>
+        <label class="toggle" title="Read replies aloud">
+          <input type="checkbox" id="tts" />
+          <span>🔊 TTS</span>
+        </label>
+        <button
+          id="voiceMode"
+          type="button"
+          class="voice-mode"
+          aria-pressed="false"
+          title="Hands-free voice-to-voice conversation"
+        >
+          <span class="dot"></span>
+          <span class="label">Voice mode</span>
+        </button>
+      </div>
     </header>
 
     <main>
-      <ol id="messages" class="messages" aria-live="polite" aria-relevant="additions"></ol>
+      <ol id="messages" class="messages" aria-live="polite"></ol>
     </main>
+
+    <section class="state-bar" aria-live="polite">
+      <div id="orb" class="orb" data-state="idle">
+        <span class="orb-icon" aria-hidden="true">🎙️</span>
+      </div>
+      <div class="state-text">
+        <div class="state-label" id="stateLabel">tap mic or type to start</div>
+        <div class="state-hint" id="stateHint"></div>
+      </div>
+      <button
+        id="interrupt"
+        type="button"
+        class="interrupt"
+        hidden
+        title="Stop the assistant"
+      >
+        ⏹ Stop
+      </button>
+    </section>
 
     <footer>
       <form id="composer">
@@ -22,8 +63,8 @@
           id="mic"
           type="button"
           class="mic"
-          aria-label="Hold to speak"
-          title="Press to start voice input"
+          aria-label="Push to talk"
+          title="Press to capture one voice message"
         >
           🎙️
         </button>
@@ -36,14 +77,12 @@
         <button id="send" type="submit" class="send">Send</button>
       </form>
 
-      <div class="controls">
-        <label>
-          <input type="checkbox" id="tts" />
-          🔊 Speak responses
-        </label>
-        <button id="reset" type="button" class="link">Reset conversation</button>
+      <div class="footer-controls">
+        <button id="reset" type="button" class="link">
+          Reset conversation
+        </button>
+        <span id="error" class="error" role="alert"></span>
       </div>
-      <div id="error" class="error" role="alert"></div>
     </footer>
 
     <script src="app.js"></script>

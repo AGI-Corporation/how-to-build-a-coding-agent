@@ -24,7 +24,7 @@ capability and the original commit (oldest first).
 | 5 | Edit and create files | [`edit_tool.go`](./edit_tool.go) | Adds `edit_file` |
 | 6 | Code search via ripgrep | [`code_search_tool.go`](./code_search_tool.go) | Adds `code_search` |
 | 7 | Self-coding agent for docs | [`self_coding_agent.go`](./self_coding_agent.go) | All previous tools + `git_log`, system prompt focused on ROADMAP.md and README.md |
-| 8 | Web UI with voice | [`web_agent.go`](./web_agent.go) + [`static/`](./static) | HTTP server with embedded frontend, Web Speech API for voice in/out, per-session conversation state |
+| 8 | Web UI with voice-to-voice | [`web_agent.go`](./web_agent.go) + [`static/`](./static) | HTTP server with embedded frontend; hands-free voice mode loop, push-to-talk, TTS with voice picker, state orb (idle/listening/thinking/speaking), interrupt-to-barge-in, per-session conversation state |
 
 ---
 

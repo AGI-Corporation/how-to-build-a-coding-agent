@@ -289,9 +289,18 @@ Architecture:
 
 UI features:
 
-* 🎙️ **Hold-to-speak microphone** with live interim transcripts.
-* 🔊 **Text-to-speech toggle** that reads each response aloud.
+* 🎙️ **Push-to-talk microphone** with live interim transcripts.
+* 🔁 **Voice mode** — a hands-free conversation loop that auto-restarts the
+  mic after each spoken reply, so you can hold a true voice-to-voice
+  conversation. Three consecutive silent turns auto-pauses the loop.
+* 🟢 **State orb** that shows whether the agent is idle / listening /
+  thinking / speaking, with a colour and animation for each.
+* 🔊 **TTS toggle** plus a **voice picker** populated from
+  `speechSynthesis.getVoices()` (selection persists in `localStorage`).
+* ⏹ **Stop / interrupt** — click the orb (or the explicit Stop button)
+  while the agent is speaking to barge in.
 * 🔧 **Tool-call visualisation** so you can see what the agent did.
+* Always-on **text input** alongside voice for mixed input.
 * Reset button to start fresh.
 
 ---
