@@ -22,7 +22,7 @@ By the end of this workshop, you’ll understand how to:
 
 ## 🛠️ What We're Building
 
-You’ll build 6 versions of a coding assistant. 
+You’ll build 7 versions of a coding assistant.
 
 Each version adds more features:
 
@@ -32,6 +32,9 @@ Each version adds more features:
 4. **Command Runner** — run shell commands
 5. **File Editor** — modify files
 6. **Code Search** — search your codebase with patterns
+7. **Self-Coding Agent** — combines every tool above plus `git_log`, with a
+   system prompt focused on maintaining the [`ROADMAP.md`](./ROADMAP.md) and
+   the README itself
 
 ```mermaid
 graph LR
@@ -41,22 +44,25 @@ graph LR
         C --> D[bash_tool.go<br/>+ Shell Commands]
         D --> E[edit_tool.go<br/>+ File Editing]
         E --> F[code_search_tool.go<br/>+ Code Search]
+        F --> S[self_coding_agent.go<br/>+ Git Log & Docs Focus]
     end
-    
+
     subgraph "Tool Capabilities"
         G[No Tools] --> H[read_file]
         H --> I[read_file<br/>list_files]
         I --> J[read_file<br/>list_files<br/>bash]
         J --> K[read_file<br/>list_files<br/>bash<br/>edit_file]
         K --> L[read_file<br/>list_files<br/>bash<br/>code_search]
+        L --> M[read_file<br/>list_files<br/>bash<br/>edit_file<br/>code_search<br/>git_log]
     end
-    
+
     A -.-> G
     B -.-> H
     C -.-> I
     D -.-> J
     E -.-> K
     F -.-> L
+    S -.-> M
 ```
 
 At the end, you’ll end up with a powerful local developer assistant!
@@ -225,6 +231,30 @@ go run code_search_tool.go
 
 ---
 
+### 7. `self_coding_agent.go` — Maintain the Roadmap & README
+
+The capstone agent. It bundles **every tool above** (`read_file`, `list_files`,
+`bash`, `edit_file`, `code_search`) and adds a new `git_log` tool plus a
+focused system prompt that orients Claude on two specific jobs:
+
+1. **Keep [`ROADMAP.md`](./ROADMAP.md) in sync with `git log`** — propose
+   roadmap updates from real shipped commits, not guesses.
+2. **Keep this README current** — when a new stage or tool lands, draft the
+   matching section without losing the workshop's tone.
+
+Because it can also read and edit `self_coding_agent.go` itself, it's a
+working example of a self-improving agent.
+
+```bash
+go run self_coding_agent.go
+```
+
+* ➡️ Try: "Read the last 20 commits and propose updates to ROADMAP.md."
+* ➡️ Try: "We just added a new tool to `edit_tool.go` — update the README."
+* ➡️ Try: "Add a `web_fetch` tool to yourself, then `go build` to verify."
+
+---
+
 ## 🧪 Sample Files (Already Included)
 
 1. `fizzbuzz.js`: for file reading and editing
@@ -289,6 +319,7 @@ Schema generation uses Go structs — so it’s easy to define and reuse.
 | **4** | `bash_tool.go`: Shell execution, error capture   |
 | **5** | `edit_tool.go`: File editing, safety checks      |
 | **6** | `code_search_tool.go`: Pattern search, ripgrep   |
+| **7** | `self_coding_agent.go`: System prompts, `git_log`, self-modification, ROADMAP.md upkeep |
 
 ---
 
