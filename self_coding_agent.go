@@ -9,11 +9,43 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"path"
+	"path/filepath"
 	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/invopop/jsonschema"
 )
+
+const systemPrompt = `You are the Self-Coding Agent for the "how-to-build-a-coding-agent" workshop.
+
+Your purpose is to assist the team in two specific tasks:
+
+1. BUILDING THE GIT ROADMAP (ROADMAP.md)
+   - Read git history with the git_log tool to understand what has shipped.
+   - Maintain ROADMAP.md as the single source of truth for what's done,
+     what's in flight, and what's planned next.
+   - Group items by milestone (e.g. "Shipped", "In Progress", "Planned").
+   - Reference the relevant Go files (chat.go, read.go, list_files.go,
+     bash_tool.go, edit_tool.go, code_search_tool.go, self_coding_agent.go)
+     when describing milestones.
+
+2. KEEPING THE README CURRENT (README.md)
+   - When a new agent stage or tool is added, reflect it in README.md.
+   - Preserve the existing tone (friendly, emoji-rich, step-by-step).
+   - Keep the mermaid diagrams in sync with the actual progression of files.
+
+You also have full self-coding ability: you can read, search, edit, and run
+the codebase that defines you (self_coding_agent.go). When the team asks for
+a new capability, propose the change, edit the file, then ` + "`go build`" + ` to verify.
+
+Workflow guidelines:
+- Always start a roadmap or README task by reading the current file first.
+- Prefer surgical edits over rewrites.
+- When unsure, list files and read the relevant source before editing.
+- After any edit to a Go file, run ` + "`go build <file>.go`" + ` via the bash tool.
+- Keep responses concise; let the diffs and tool output speak for you.
+`
 
 func main() {
 	verbose := flag.Bool("verbose", false, "enable verbose logging")
@@ -42,7 +74,14 @@ func main() {
 		return scanner.Text(), true
 	}
 
-	tools := []ToolDefinition{ReadFileDefinition, ListFilesDefinition, BashDefinition, CodeSearchDefinition}
+	tools := []ToolDefinition{
+		ReadFileDefinition,
+		ListFilesDefinition,
+		BashDefinition,
+		EditFileDefinition,
+		CodeSearchDefinition,
+		GitLogDefinition,
+	}
 	if *verbose {
 		log.Printf("Initialized %d tools", len(tools))
 	}
@@ -78,12 +117,13 @@ func (a *Agent) Run(ctx context.Context) error {
 	conversation := []anthropic.MessageParam{}
 
 	if a.verbose {
-		log.Println("Starting chat session with tools enabled")
+		log.Println("Starting self-coding agent session")
 	}
-	fmt.Println("Chat with Claude (use 'ctrl-c' to quit)")
+	fmt.Println("Self-Coding Agent ready. Ask for help with ROADMAP.md, README.md, or new tools.")
+	fmt.Println("(use 'ctrl-c' to quit)")
 
 	for {
-		fmt.Print("\u001b[94mYou\u001b[0m: ")
+		fmt.Print("[94mYou[0m: ")
 		userInput, ok := a.getUserMessage()
 		if !ok {
 			if a.verbose {
@@ -92,7 +132,6 @@ func (a *Agent) Run(ctx context.Context) error {
 			break
 		}
 
-		// Skip empty messages
 		if userInput == "" {
 			if a.verbose {
 				log.Println("Skipping empty message")
@@ -107,10 +146,6 @@ func (a *Agent) Run(ctx context.Context) error {
 		userMessage := anthropic.NewUserMessage(anthropic.NewTextBlock(userInput))
 		conversation = append(conversation, userMessage)
 
-		if a.verbose {
-			log.Printf("Sending message to Claude, conversation length: %d", len(conversation))
-		}
-
 		message, err := a.runInference(ctx, conversation)
 		if err != nil {
 			if a.verbose {
@@ -120,9 +155,7 @@ func (a *Agent) Run(ctx context.Context) error {
 		}
 		conversation = append(conversation, message.ToParam())
 
-		// Keep processing until Claude stops using tools
 		for {
-			// Collect all tool uses and their results
 			var toolResults []anthropic.ContentBlockParamUnion
 			var hasToolUse bool
 
@@ -133,35 +166,24 @@ func (a *Agent) Run(ctx context.Context) error {
 			for _, content := range message.Content {
 				switch content.Type {
 				case "text":
-					fmt.Printf("\u001b[93mClaude\u001b[0m: %s\n", content.Text)
+					fmt.Printf("[93mClaude[0m: %s\n", content.Text)
 				case "tool_use":
 					hasToolUse = true
 					toolUse := content.AsToolUse()
 					if a.verbose {
 						log.Printf("Tool use detected: %s with input: %s", toolUse.Name, string(toolUse.Input))
 					}
-					fmt.Printf("\u001b[96mtool\u001b[0m: %s(%s)\n", toolUse.Name, string(toolUse.Input))
+					fmt.Printf("[96mtool[0m: %s(%s)\n", toolUse.Name, string(toolUse.Input))
 
-					// Find and execute the tool
 					var toolResult string
 					var toolError error
 					var toolFound bool
 					for _, tool := range a.tools {
 						if tool.Name == toolUse.Name {
-							if a.verbose {
-								log.Printf("Executing tool: %s", tool.Name)
-							}
 							toolResult, toolError = tool.Function(toolUse.Input)
-							fmt.Printf("\u001b[92mresult\u001b[0m: %s\n", toolResult)
+							fmt.Printf("[92mresult[0m: %s\n", toolResult)
 							if toolError != nil {
-								fmt.Printf("\u001b[91merror\u001b[0m: %s\n", toolError.Error())
-							}
-							if a.verbose {
-								if toolError != nil {
-									log.Printf("Tool execution failed: %v", toolError)
-								} else {
-									log.Printf("Tool execution successful, result length: %d chars", len(toolResult))
-								}
+								fmt.Printf("[91merror[0m: %s\n", toolError.Error())
 							}
 							toolFound = true
 							break
@@ -170,10 +192,9 @@ func (a *Agent) Run(ctx context.Context) error {
 
 					if !toolFound {
 						toolError = fmt.Errorf("tool '%s' not found", toolUse.Name)
-						fmt.Printf("\u001b[91merror\u001b[0m: %s\n", toolError.Error())
+						fmt.Printf("[91merror[0m: %s\n", toolError.Error())
 					}
 
-					// Add tool result to collection
 					if toolError != nil {
 						toolResults = append(toolResults, anthropic.NewToolResultBlock(toolUse.ID, toolError.Error(), true))
 					} else {
@@ -182,19 +203,13 @@ func (a *Agent) Run(ctx context.Context) error {
 				}
 			}
 
-			// If there were no tool uses, we're done
 			if !hasToolUse {
 				break
 			}
 
-			// Send all tool results back and get Claude's response
-			if a.verbose {
-				log.Printf("Sending %d tool results back to Claude", len(toolResults))
-			}
 			toolResultMessage := anthropic.NewUserMessage(toolResults...)
 			conversation = append(conversation, toolResultMessage)
 
-			// Get Claude's response after tool execution
 			message, err = a.runInference(ctx, conversation)
 			if err != nil {
 				if a.verbose {
@@ -203,17 +218,11 @@ func (a *Agent) Run(ctx context.Context) error {
 				return err
 			}
 			conversation = append(conversation, message.ToParam())
-
-			if a.verbose {
-				log.Printf("Received followup response with %d content blocks", len(message.Content))
-			}
-
-			// Continue loop to process the new message
 		}
 	}
 
 	if a.verbose {
-		log.Println("Chat session ended")
+		log.Println("Self-coding agent session ended")
 	}
 	return nil
 }
@@ -236,9 +245,12 @@ func (a *Agent) runInference(ctx context.Context, conversation []anthropic.Messa
 
 	message, err := a.client.Messages.New(ctx, anthropic.MessageNewParams{
 		Model:     anthropic.ModelClaudeOpus4_6,
-		MaxTokens: int64(1024),
-		Messages:  conversation,
-		Tools:     anthropicTools,
+		MaxTokens: int64(4096),
+		System: []anthropic.TextBlockParam{
+			{Text: systemPrompt},
+		},
+		Messages: conversation,
+		Tools:    anthropicTools,
 	})
 
 	if a.verbose {
@@ -275,19 +287,38 @@ var ListFilesDefinition = ToolDefinition{
 
 var BashDefinition = ToolDefinition{
 	Name:        "bash",
-	Description: "Execute a bash command and return its output. Use this to run shell commands.",
+	Description: "Execute a bash command and return its output. Use this to run shell commands, build the agent, or run tests.",
 	InputSchema: BashInputSchema,
 	Function:    Bash,
+}
+
+var EditFileDefinition = ToolDefinition{
+	Name: "edit_file",
+	Description: `Make edits to a text file.
+
+Replaces 'old_str' with 'new_str' in the given file. 'old_str' and 'new_str' MUST be different from each other.
+
+If the file specified with path doesn't exist, it will be created.
+`,
+	InputSchema: EditFileInputSchema,
+	Function:    EditFile,
 }
 
 var CodeSearchDefinition = ToolDefinition{
 	Name: "code_search",
 	Description: `Search for code patterns using ripgrep (rg).
 
-Use this to find code patterns, function definitions, variable usage, or any text in the codebase.
-You can search by pattern, file type, or directory.`,
+Use this to find code patterns, function definitions, variable usage, or any text in the codebase.`,
 	InputSchema: CodeSearchInputSchema,
 	Function:    CodeSearch,
+}
+
+var GitLogDefinition = ToolDefinition{
+	Name: "git_log",
+	Description: `Read git commit history. Use this to understand what has shipped recently
+when building or updating ROADMAP.md. Returns a one-line summary per commit.`,
+	InputSchema: GitLogInputSchema,
+	Function:    GitLog,
 }
 
 type ReadFileInput struct {
@@ -308,19 +339,33 @@ type BashInput struct {
 
 var BashInputSchema = GenerateSchema[BashInput]()
 
+type EditFileInput struct {
+	Path   string `json:"path" jsonschema_description:"The path to the file"`
+	OldStr string `json:"old_str" jsonschema_description:"Text to search for - must match exactly and must only have one match exactly"`
+	NewStr string `json:"new_str" jsonschema_description:"Text to replace old_str with"`
+}
+
+var EditFileInputSchema = GenerateSchema[EditFileInput]()
+
 type CodeSearchInput struct {
 	Pattern       string `json:"pattern" jsonschema_description:"The search pattern or regex to look for"`
 	Path          string `json:"path,omitempty" jsonschema_description:"Optional path to search in (file or directory)"`
-	FileType      string `json:"file_type,omitempty" jsonschema_description:"Optional file extension to limit search to (e.g., 'go', 'js', 'py')"`
+	FileType      string `json:"file_type,omitempty" jsonschema_description:"Optional file extension to limit search to (e.g., 'go', 'md')"`
 	CaseSensitive bool   `json:"case_sensitive,omitempty" jsonschema_description:"Whether the search should be case sensitive (default: false)"`
 }
 
 var CodeSearchInputSchema = GenerateSchema[CodeSearchInput]()
 
+type GitLogInput struct {
+	Limit int    `json:"limit,omitempty" jsonschema_description:"Maximum number of commits to show (default 20, max 200)"`
+	Path  string `json:"path,omitempty" jsonschema_description:"Optional file or directory path to scope the log to"`
+}
+
+var GitLogInputSchema = GenerateSchema[GitLogInput]()
+
 func ReadFile(input json.RawMessage) (string, error) {
 	readFileInput := ReadFileInput{}
-	err := json.Unmarshal(input, &readFileInput)
-	if err != nil {
+	if err := json.Unmarshal(input, &readFileInput); err != nil {
 		panic(err)
 	}
 
@@ -336,8 +381,7 @@ func ReadFile(input json.RawMessage) (string, error) {
 
 func ListFiles(input json.RawMessage) (string, error) {
 	listFilesInput := ListFilesInput{}
-	err := json.Unmarshal(input, &listFilesInput)
-	if err != nil {
+	if err := json.Unmarshal(input, &listFilesInput); err != nil {
 		panic(err)
 	}
 
@@ -347,31 +391,42 @@ func ListFiles(input json.RawMessage) (string, error) {
 	}
 
 	log.Printf("Listing files in directory: %s", dir)
-	cmd := exec.Command("find", dir, "-type", "f", "-not", "-path", "*/.devenv/*", "-not", "-path", "*/.git/*")
-	output, err := cmd.Output()
+	var files []string
+	err := filepath.Walk(dir, func(p string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		relPath, err := filepath.Rel(dir, p)
+		if err != nil {
+			return err
+		}
+		if info.IsDir() && (relPath == ".devenv" || strings.HasPrefix(relPath, ".devenv/") ||
+			relPath == ".git" || strings.HasPrefix(relPath, ".git/")) {
+			return filepath.SkipDir
+		}
+		if relPath != "." {
+			if info.IsDir() {
+				files = append(files, relPath+"/")
+			} else {
+				files = append(files, relPath)
+			}
+		}
+		return nil
+	})
 	if err != nil {
-		log.Printf("Failed to list files in %s: %v", dir, err)
 		return "", err
-	}
-
-	files := strings.Split(strings.TrimSpace(string(output)), "\n")
-	if len(files) == 1 && files[0] == "" {
-		files = []string{}
 	}
 
 	result, err := json.Marshal(files)
 	if err != nil {
 		return "", err
 	}
-
-	log.Printf("Successfully listed %d files in %s", len(files), dir)
 	return string(result), nil
 }
 
 func Bash(input json.RawMessage) (string, error) {
 	bashInput := BashInput{}
-	err := json.Unmarshal(input, &bashInput)
-	if err != nil {
+	if err := json.Unmarshal(input, &bashInput); err != nil {
 		return "", err
 	}
 
@@ -379,79 +434,130 @@ func Bash(input json.RawMessage) (string, error) {
 	cmd := exec.Command("bash", "-c", bashInput.Command)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		log.Printf("Bash command failed: %v", err)
 		return fmt.Sprintf("Command failed with error: %s\nOutput: %s", err.Error(), string(output)), nil
 	}
-
-	log.Printf("Bash command executed successfully, output length: %d chars", len(output))
 	return strings.TrimSpace(string(output)), nil
+}
+
+func EditFile(input json.RawMessage) (string, error) {
+	editFileInput := EditFileInput{}
+	if err := json.Unmarshal(input, &editFileInput); err != nil {
+		return "", err
+	}
+
+	if editFileInput.Path == "" || editFileInput.OldStr == editFileInput.NewStr {
+		return "", fmt.Errorf("invalid input parameters")
+	}
+
+	content, err := os.ReadFile(editFileInput.Path)
+	if err != nil {
+		if os.IsNotExist(err) && editFileInput.OldStr == "" {
+			return createNewFile(editFileInput.Path, editFileInput.NewStr)
+		}
+		return "", err
+	}
+
+	oldContent := string(content)
+
+	var newContent string
+	if editFileInput.OldStr == "" {
+		newContent = oldContent + editFileInput.NewStr
+	} else {
+		count := strings.Count(oldContent, editFileInput.OldStr)
+		if count == 0 {
+			return "", fmt.Errorf("old_str not found in file")
+		}
+		if count > 1 {
+			return "", fmt.Errorf("old_str found %d times in file, must be unique", count)
+		}
+		newContent = strings.Replace(oldContent, editFileInput.OldStr, editFileInput.NewStr, 1)
+	}
+
+	if err := os.WriteFile(editFileInput.Path, []byte(newContent), 0644); err != nil {
+		return "", err
+	}
+	return "OK", nil
+}
+
+func createNewFile(filePath, content string) (string, error) {
+	dir := path.Dir(filePath)
+	if dir != "." {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return "", fmt.Errorf("failed to create directory: %w", err)
+		}
+	}
+	if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
+		return "", fmt.Errorf("failed to create file: %w", err)
+	}
+	return fmt.Sprintf("Successfully created file %s", filePath), nil
 }
 
 func CodeSearch(input json.RawMessage) (string, error) {
 	codeSearchInput := CodeSearchInput{}
-	err := json.Unmarshal(input, &codeSearchInput)
-	if err != nil {
+	if err := json.Unmarshal(input, &codeSearchInput); err != nil {
 		return "", err
 	}
-
 	if codeSearchInput.Pattern == "" {
-		log.Printf("CodeSearch failed: pattern is required")
 		return "", fmt.Errorf("pattern is required")
 	}
 
-	log.Printf("Searching for pattern: %s", codeSearchInput.Pattern)
-
-	// Build ripgrep command
-	args := []string{"rg", "--line-number", "--with-filename", "--color=never"}
-
-	// Add case sensitivity flag
+	args := []string{"--line-number", "--with-filename", "--color=never"}
 	if !codeSearchInput.CaseSensitive {
 		args = append(args, "--ignore-case")
 	}
-
-	// Add file type filter if specified
 	if codeSearchInput.FileType != "" {
 		args = append(args, "--type", codeSearchInput.FileType)
 	}
-
-	// Add pattern
 	args = append(args, codeSearchInput.Pattern)
-
-	// Add path if specified
 	if codeSearchInput.Path != "" {
 		args = append(args, codeSearchInput.Path)
 	} else {
 		args = append(args, ".")
 	}
 
-	if a := false; a { // This is a hack to access verbose mode
-		log.Printf("Executing ripgrep with args: %v", args)
-	}
-
-	cmd := exec.Command(args[0], args[1:]...)
+	cmd := exec.Command("rg", args...)
 	output, err := cmd.Output()
-
-	// ripgrep returns exit code 1 when no matches are found, which is not an error
 	if err != nil {
 		if exitError, ok := err.(*exec.ExitError); ok && exitError.ExitCode() == 1 {
-			log.Printf("No matches found for pattern: %s", codeSearchInput.Pattern)
 			return "No matches found", nil
 		}
-		log.Printf("Ripgrep command failed: %v", err)
 		return "", fmt.Errorf("search failed: %w", err)
 	}
 
 	result := strings.TrimSpace(string(output))
 	lines := strings.Split(result, "\n")
-
-	log.Printf("Found %d matches for pattern: %s", len(lines), codeSearchInput.Pattern)
-
-	// Limit output to prevent overwhelming responses
 	if len(lines) > 50 {
 		result = strings.Join(lines[:50], "\n") + fmt.Sprintf("\n... (showing first 50 of %d matches)", len(lines))
 	}
-
 	return result, nil
+}
+
+func GitLog(input json.RawMessage) (string, error) {
+	gitLogInput := GitLogInput{}
+	if err := json.Unmarshal(input, &gitLogInput); err != nil {
+		return "", err
+	}
+
+	limit := gitLogInput.Limit
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > 200 {
+		limit = 200
+	}
+
+	args := []string{"log", fmt.Sprintf("-%d", limit), "--oneline", "--no-decorate"}
+	if gitLogInput.Path != "" {
+		args = append(args, "--", gitLogInput.Path)
+	}
+
+	log.Printf("Running git %s", strings.Join(args, " "))
+	cmd := exec.Command("git", args...)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Sprintf("git log failed: %s\nOutput: %s", err.Error(), string(output)), nil
+	}
+	return strings.TrimSpace(string(output)), nil
 }
 
 func GenerateSchema[T any]() anthropic.ToolInputSchemaParam {
@@ -460,9 +566,7 @@ func GenerateSchema[T any]() anthropic.ToolInputSchemaParam {
 		DoNotReference:            true,
 	}
 	var v T
-
 	schema := reflector.Reflect(v)
-
 	return anthropic.ToolInputSchemaParam{
 		Properties: schema.Properties,
 	}

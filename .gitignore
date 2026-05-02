@@ -16,6 +16,8 @@ edit_tool
 list_files
 read
 read_verbose
+code_search_tool
+self_coding_agent
 
 # demo files
 fizzbuzz.js

@@ -19,6 +19,8 @@ This project uses [devenv](https://devenv.sh/) for reproducible development envi
 - `go run list_files.go` - Chat with file listing and reading capabilities
 - `go run bash_tool.go` - Chat with file operations and bash command execution
 - `go run edit_tool.go` - Chat with full file operations (read, list, edit, bash)
+- `go run code_search_tool.go` - Chat with file operations and ripgrep-powered code search
+- `go run self_coding_agent.go` - Capstone agent with all tools plus `git_log`, focused on maintaining ROADMAP.md and README.md
 
 ### Verbose Logging
 All Go applications support a `--verbose` flag for detailed execution logging:
